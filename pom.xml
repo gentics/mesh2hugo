@@ -26,6 +26,17 @@
 			<artifactId>commons-lang3</artifactId>
 			<version>3.8.1</version>
 		</dependency>
+		<dependency>
+			<groupId>commons-cli</groupId>
+			<artifactId>commons-cli</artifactId>
+			<version>1.4</version>
+		</dependency>
+		<dependency>
+			<groupId>com.oracle.substratevm</groupId>
+			<artifactId>svm</artifactId>
+			<version>1.0.0-rc16</version>
+			<scope>provided</scope>
+		</dependency>
 
 		<!-- Test dependency -->
 		<dependency>
@@ -39,12 +50,30 @@
 	<build>
 		<plugins>
 			<plugin>
+				<groupId>com.oracle.substratevm</groupId>
+				<artifactId>native-image-maven-plugin</artifactId>
+				<version>1.0.0-rc16</version>
+				<configuration>
+					<mainClass>com.gentics.mesh.HugoExporter</mainClass>
+					<imageName>mesh-hugo-exporter</imageName>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>native-image</goal>
+						</goals>
+						<phase>package</phase>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.8.0</version>
 				<configuration>
-					<release>11</release>
-					<target>11</target>
+					<!-- <release>8</release> -->
+					<source>8</source>
+					<target>8</target>
 				</configuration>
 			</plugin>
 		</plugins>
