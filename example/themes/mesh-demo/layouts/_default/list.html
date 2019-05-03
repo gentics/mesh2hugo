@@ -1,0 +1,50 @@
+{{ define "content" }}
+<div>
+	<h1>{{ .Title }}</h1>
+	<p>{{ .Params.name }}</p>
+	<div class="row data.node.products">
+		{{ range .Pages }}
+		<div class="col-xs-12 col-sm-6 col-md-4">
+
+			<div class="panel panel-default">
+				<div class="panel-body">
+					<h3>
+						<a href="{{ .Params.path }}">{{ .Params.name | default "Unknown" }}</a>
+						<small>{{ .Params.SKU | default 0 }}</small>
+					</h3>
+
+					<a href="{{ .Params.path }}">
+						<img style="height: 200px; width: 100%;" src="{{ .Params.vehicleImage | default " http://via.placeholder.com/350x200 " }}"
+						 class="img-thumbnail">
+					</a>
+
+					<p>{{ .Params.description | default "-" }}</p>
+
+					<hr>
+
+					<div class="row">
+						<div class="col-xs-6">
+							<!--| number: 2 -->
+							<h3 style="margin: 5px 0;">
+								<span class="label label-primary">€{{ .Params.price | default 0 }}</span>
+							</h3>
+						</div>
+						<div class="col-xs-6 text-right">
+							<span class="label label-default">Weight: {{ .Params.weight| default 0 }}</span>
+							<br>
+							<span class="label label-default">Stock: {{ .Params.stocklevel | default 0 }}</span>
+						</div>
+					</div>
+
+				</div>
+
+			</div>
+		</div>
+		{{end}}
+	</div>
+</div>
+{{end}}
+
+
+
+

@@ -3,13 +3,16 @@ package com.gentics.mesh;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -20,34 +23,53 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.io.FileUtils;
 
+import com.gentics.mesh.core.rest.node.FieldMap;
 import com.gentics.mesh.core.rest.node.NodeListResponse;
 import com.gentics.mesh.core.rest.node.NodeResponse;
 import com.gentics.mesh.core.rest.node.PublishStatusModel;
+import com.gentics.mesh.core.rest.node.field.MicronodeField;
+import com.gentics.mesh.core.rest.node.field.NodeField;
+import com.gentics.mesh.core.rest.node.field.impl.BooleanFieldImpl;
+import com.gentics.mesh.core.rest.node.field.impl.DateFieldImpl;
+import com.gentics.mesh.core.rest.node.field.impl.HtmlFieldImpl;
+import com.gentics.mesh.core.rest.node.field.impl.NumberFieldImpl;
+import com.gentics.mesh.core.rest.node.field.impl.StringFieldImpl;
+import com.gentics.mesh.core.rest.node.field.list.MicronodeFieldList;
+import com.gentics.mesh.core.rest.node.field.list.NodeFieldList;
+import com.gentics.mesh.core.rest.node.field.list.impl.BooleanFieldListImpl;
+import com.gentics.mesh.core.rest.node.field.list.impl.DateFieldListImpl;
+import com.gentics.mesh.core.rest.node.field.list.impl.HtmlFieldListImpl;
+import com.gentics.mesh.core.rest.node.field.list.impl.NumberFieldListImpl;
+import com.gentics.mesh.core.rest.node.field.list.impl.StringFieldListImpl;
 import com.gentics.mesh.core.rest.schema.FieldSchema;
+import com.gentics.mesh.core.rest.schema.ListFieldSchema;
 import com.gentics.mesh.core.rest.schema.SchemaListResponse;
 import com.gentics.mesh.core.rest.schema.impl.SchemaResponse;
 import com.gentics.mesh.parameter.LinkType;
 import com.gentics.mesh.parameter.client.NodeParametersImpl;
 import com.gentics.mesh.rest.client.MeshRestClient;
 
-import io.vertx.core.json.JsonObject;
-
 public class HugoExporter {
 
 	public static final String NAME = "mesh-hugo-exporter";
 
+	private MeshRestClient client;
 	private String url;
-	private File output;
-	private String key;
+	private File output = new File("content");
+	private String apiKey;
 	private String projectName;
 
-	public HugoExporter setKey(String key) {
-		this.key = key;
+	public HugoExporter setApiKey(String apiKey) {
+		this.apiKey = apiKey;
 		return this;
 	}
 
 	private void setOutput(File output) {
 		this.output = output;
+	}
+
+	private File getOutput() {
+		return output;
 	}
 
 	private void setProjectName(String projectName) {
@@ -61,7 +83,7 @@ public class HugoExporter {
 	public static Options generateOptions() {
 		Options options = new Options();
 		options.addOption(new Option("help", "print this message"));
-		options.addOption(new Option("o", "output", true, "Output directory"));
+		options.addOption(new Option("o", "output", true, "Output directory (default: content)"));
 		options.addOption(new Option("url", true, "Gentics Mesh API URL (e.g.  https://demo.getmesh.io/api/v1/)"));
 		options.addOption(new Option("k", "key", true, "API Key"));
 		options.addOption(new Option("c", "clean", false, "Clean output directory"));
@@ -86,12 +108,10 @@ public class HugoExporter {
 			}
 
 			// output
-			File output = new File("output");
 			if (line.hasOption("o")) {
-				output = new File(line.getOptionValue("o"));
+				exporter.setOutput(new File(line.getOptionValue("o")));
 			}
-			System.out.println("Using output: " + output);
-			exporter.setOutput(output);
+			System.out.println("Using output: " + exporter.getOutput());
 
 			// url
 			if (line.hasOption("url")) {
@@ -136,18 +156,13 @@ public class HugoExporter {
 	}
 
 	private void run() throws IOException {
+		setupClient();
 		export();
 		System.out.println("-----");
 		System.out.println("All done...");
 	}
 
-	public void cleanup() throws IOException {
-		System.out.println("Cleaning output directory: " + output);
-		FileUtils.deleteDirectory(output);
-	}
-
-	public void export() throws IOException {
-
+	private void setupClient() throws MalformedURLException {
 		URL uri = new URL(url);
 		boolean ssl = uri.getProtocol().startsWith("https");
 		int port = uri.getPort();
@@ -157,10 +172,19 @@ public class HugoExporter {
 
 		String host = uri.getHost();
 
-		MeshRestClient client = MeshRestClient.create(host, port, ssl);
-		if (key != null) {
-			client.setAPIKey(key);
+		client = MeshRestClient.create(host, port, ssl);
+		if (apiKey != null) {
+			client.setAPIKey(apiKey);
 		}
+
+	}
+
+	public void cleanup() throws IOException {
+		System.out.println("Cleaning output directory: " + output);
+		FileUtils.deleteDirectory(output);
+	}
+
+	public void export() throws IOException {
 
 		SchemaListResponse schemaList = client.findSchemas().blockingGet();
 		Map<String, SchemaResponse> schemas = new HashMap<>();
@@ -173,46 +197,179 @@ public class HugoExporter {
 			Map<String, PublishStatusModel> langs = node.getAvailableLanguages();
 			String schemaUuid = node.getSchema().getUuid();
 			SchemaResponse schema = schemas.get(schemaUuid);
-			String segment = schema.getSegmentField();
 
 			// Handle all contents of the node
 			for (String lang : langs.keySet()) {
-				FieldSchema fieldSchema = schema.getField(segment);
 				node = client
 					.findNodeByUuid(projectName, node.getUuid(), new NodeParametersImpl().setResolveLinks(LinkType.SHORT).setLanguages(lang))
 					.blockingGet();
-				String path = node.getPath();
-				if (fieldSchema.getType().equals("binary")) {
-					Path outputPath = new File(output, path).toPath();
-					outputPath.getParent().toFile().mkdirs();
-					System.out.println("Exporting " + node.getUuid() + "/" + lang + " => " + outputPath);
-					try (InputStream ins = client.downloadBinaryField(projectName, node.getUuid(), lang, segment).blockingGet().getStream()) {
-						Files.copy(ins, outputPath, StandardCopyOption.REPLACE_EXISTING);
-					}
-				} else {
-					StringBuffer buffer = new StringBuffer();
-					JsonObject json = new JsonObject(node.getFields().toJson());
-					buffer.append("---\n");
-					for (String name : json.fieldNames()) {
-						Object val = json.getValue(name);
-						if (val instanceof String | val instanceof Integer | val instanceof Double) {
-							buffer.append(name + ": \"" + val + "\"\n");
-						}
-						// if (val instanceof JsonObject) {
-						//
-						// }
-						// if (val instanceof JsonArray) {
-						//
-						// }
-					}
-					buffer.append("---\n");
-					Path outputPath = new File(new File(output, path), "index.md").toPath();
-					outputPath.getParent().toFile().mkdirs();
-					System.out.println("Exporting " + node.getUuid() + "/" + lang + " => " + outputPath);
-					FileUtils.writeStringToFile(outputPath.toFile(), buffer.toString(), Charset.defaultCharset());
-				}
+				exportNode(node, lang, schema);
 			}
 		}
+
+	}
+
+	private void exportNode(NodeResponse node, String lang, SchemaResponse schema) throws IOException {
+		String path = node.getPath();
+
+		String segmentFieldKey = schema.getSegmentField();
+		FieldSchema segmentFieldSchema = schema.getField(segmentFieldKey);
+		boolean hasBinarySegment = segmentFieldSchema.getType().equals("binary");
+
+		if (hasBinarySegment) {
+			Path outputPath = new File(output, path).toPath();
+			outputPath.getParent().toFile().mkdirs();
+			System.out.println("Exporting " + node.getUuid() + "/" + lang + " => " + outputPath);
+			try (InputStream ins = client.downloadBinaryField(projectName, node.getUuid(), lang, segmentFieldKey).blockingGet().getStream()) {
+				Files.copy(ins, outputPath, StandardCopyOption.REPLACE_EXISTING);
+			}
+		} else {
+			StringBuffer buffer = new StringBuffer();
+			buffer.append("---\n");
+			for (FieldSchema fieldSchema : schema.getFields()) {
+				extractField(buffer, fieldSchema, node.getFields());
+			}
+			buffer.append("---\n");
+			Path outputPath = new File(new File(output, path), "index.md").toPath();
+			outputPath.getParent().toFile().mkdirs();
+			System.out.println("Exporting " + node.getUuid() + "/" + lang + " => " + outputPath);
+			FileUtils.writeStringToFile(outputPath.toFile(), buffer.toString(), Charset.defaultCharset());
+		}
+
+	}
+
+	private void extractField(StringBuffer buffer, FieldSchema fieldSchema, FieldMap fields) {
+		String key = fieldSchema.getName();
+		if (key.equals("slug")) {
+			key = "mesh.slug";
+		}
+		if (key.equals("name")) {
+			key = "mesh.name";
+		}
+
+		String type = fieldSchema.getType();
+		switch (type) {
+		case "html":
+			HtmlFieldImpl htmlField = fields.getHtmlField(key);
+			if (htmlField != null) {
+				String val2Str = htmlField.getHTML().replaceAll("\"", "\\\"");
+				buffer.append(key + ": \"" + val2Str + "\"\n");
+			}
+			break;
+		case "string":
+			StringFieldImpl stringField = fields.getStringField(key);
+			if (stringField != null) {
+				String valStr = stringField.getString().replaceAll("\"", "\\\"");
+				buffer.append(key + ": \"" + valStr + "\"\n");
+			}
+			break;
+		case "number":
+			NumberFieldImpl numberField = fields.getNumberField(key);
+			if (numberField != null) {
+				buffer.append(key + ": " + numberField.getNumber() + "\n");
+			}
+			break;
+		case "boolean":
+			BooleanFieldImpl booleanField = fields.getBooleanField(key);
+			if (booleanField != null) {
+				buffer.append(key + ": " + booleanField.getValue() + "\n");
+			}
+			break;
+		case "date":
+			DateFieldImpl dateField = fields.getDateField(key);
+			if (dateField != null) {
+				buffer.append(key + ": \"" + dateField.getDate() + "\"\n");
+			}
+			break;
+		case "micronode":
+			MicronodeField micronodeField = fields.getMicronodeField(key);
+			if (micronodeField != null) {
+				// TODO add fields
+				buffer.append(key + ": \"" + micronodeField.getUuid() + "\"\n");
+			}
+			break;
+		case "node":
+			NodeField nodeField = fields.getNodeField(key);
+			if (nodeField != null) {
+				buffer.append(key + ": \"" + nodeField.getPath() + "\"\n");
+			}
+			break;
+		case "list":
+			extractListField(buffer, fieldSchema, fields);
+			break;
+		case "binary":
+			// Not exported
+			break;
+		default:
+			throw new RuntimeException("Handling for field type {" + type + "} no supported");
+		}
+	}
+
+	private void extractListField(StringBuffer buffer, FieldSchema fieldSchema, FieldMap fields) {
+		ListFieldSchema listFieldSchema = (ListFieldSchema) fieldSchema;
+		String key = fieldSchema.getName();
+		String listType = listFieldSchema.getListType();
+		switch (listType) {
+		case "node":
+			NodeFieldList nodeField = fields.getNodeFieldList(key);
+			if (nodeField != null) {
+				List<String> nodeList = nodeField.getItems().stream()
+					.map(n -> n.getPath())
+					.map(n -> "\"" + n + "\"")
+					.collect(Collectors.toList());
+				buffer.append(key + ": [" + String.join(",", nodeList) + "]\n");
+			}
+			break;
+		case "string":
+			StringFieldListImpl stringField = fields.getStringFieldList(key);
+			if (stringField != null) {
+				extractStringList(key, buffer, stringField.getItems());
+			}
+			break;
+		case "html":
+			HtmlFieldListImpl htmlField = fields.getHtmlFieldList(key);
+			if (htmlField != null) {
+				extractStringList(key, buffer, htmlField.getItems());
+			}
+		case "number":
+			NumberFieldListImpl numberField = fields.getNumberFieldList(key);
+			if (numberField != null) {
+				List<String> numberList = numberField.getItems().stream().map(n -> n.toString()).collect(Collectors.toList());
+				buffer.append(key + ": [" + String.join(",", numberList) + "]\n");
+			}
+			break;
+		case "date":
+			DateFieldListImpl dateField = fields.getDateFieldList(key);
+			if (dateField != null) {
+				List<String> dateList = dateField.getItems();
+				buffer.append(key + ": [" + String.join(",", dateList) + "]\n");
+			}
+			break;
+		case "micronode":
+			MicronodeFieldList micronodeField = fields.getMicronodeFieldList(key);
+			if (micronodeField != null) {
+				List<MicronodeField> micronodeList = micronodeField.getItems();
+				buffer.append(key + ": [" + "]\n");
+			}
+			break;
+		case "boolean":
+			BooleanFieldListImpl booleanField = fields.getBooleanFieldList(key);
+			if (booleanField != null) {
+				List<String> booleanList = booleanField.getItems().stream().map(b -> b.toString()).collect(Collectors.toList());
+				buffer.append(key + ": [" + String.join(",", booleanList) + "]\n");
+			}
+			break;
+		default:
+			throw new RuntimeException("Handling for listfield type {" + listType + "} no supported");
+		}
+
+	}
+
+	private void extractStringList(String key, StringBuffer buffer, List<String> list) {
+		List<String> stringList = list.stream().map(e -> e.replaceAll("\"", "\\\"")).map(e -> "\"" + e + "\"")
+			.collect(Collectors.toList());
+		String str = String.join(",", stringList);
+		buffer.append(key + ": [" + str + "]\n");
 
 	}
 }

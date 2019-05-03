@@ -1,3 +1,4 @@
+package com.gentics.mesh;
 import java.io.IOException;
 
 import org.junit.Test;

@@ -1,0 +1,11 @@
+name = "Gentics Mesh Demo"
+license = "MIT"
+licenselink = "https://github.com/gentics/mesh-hugo-exporter/blob/master/LICENSE"
+description = "A example theme for the Gentics Mesh demo"
+homepage = "https://github.com/gentics/mesh-hugo/exporter"
+tags = ["demo", "headless-cms"]
+min_version = 0.43
+
+[author]
+  name = "Jotschi"
+  homepage = "https://github.com/jotschi"
