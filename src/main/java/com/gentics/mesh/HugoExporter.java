@@ -12,15 +12,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
 import org.apache.commons.io.FileUtils;
 
 import com.gentics.mesh.core.rest.node.FieldMap;
@@ -45,13 +39,12 @@ import com.gentics.mesh.core.rest.schema.FieldSchema;
 import com.gentics.mesh.core.rest.schema.ListFieldSchema;
 import com.gentics.mesh.core.rest.schema.SchemaListResponse;
 import com.gentics.mesh.core.rest.schema.impl.SchemaResponse;
+import com.gentics.mesh.core.rest.user.UserReference;
 import com.gentics.mesh.parameter.LinkType;
 import com.gentics.mesh.parameter.client.NodeParametersImpl;
 import com.gentics.mesh.rest.client.MeshRestClient;
 
 public class HugoExporter {
-
-	public static final String NAME = "mesh-hugo-exporter";
 
 	private MeshRestClient client;
 	private String url;
@@ -64,15 +57,15 @@ public class HugoExporter {
 		return this;
 	}
 
-	private void setOutput(File output) {
+	public void setOutput(File output) {
 		this.output = output;
 	}
 
-	private File getOutput() {
+	public File getOutput() {
 		return output;
 	}
 
-	private void setProjectName(String projectName) {
+	public void setProjectName(String projectName) {
 		this.projectName = projectName;
 	}
 
@@ -80,82 +73,7 @@ public class HugoExporter {
 		this.url = url;
 	}
 
-	public static Options generateOptions() {
-		Options options = new Options();
-		options.addOption(new Option("help", "print this message"));
-		options.addOption(new Option("o", "output", true, "Output directory (default: content)"));
-		options.addOption(new Option("url", true, "Gentics Mesh API URL (e.g.  https://demo.getmesh.io/api/v1/)"));
-		options.addOption(new Option("k", "key", true, "API Key"));
-		options.addOption(new Option("c", "clean", false, "Clean output directory"));
-		options.addOption(new Option("p", "project", true, "Project name to export"));
-		return options;
-	}
-
-	public static void main(String[] args) throws IOException {
-		handleArgs(args);
-	}
-
-	public static void handleArgs(String... args) throws IOException {
-		Options options = generateOptions();
-		CommandLineParser parser = new DefaultParser();
-		try {
-			HugoExporter exporter = new HugoExporter();
-			CommandLine line = parser.parse(options, args);
-			if (line.getOptions().length == 0) {
-				HelpFormatter formatter = new HelpFormatter();
-				formatter.printHelp(NAME, options);
-				System.exit(2);
-			}
-
-			// output
-			if (line.hasOption("o")) {
-				exporter.setOutput(new File(line.getOptionValue("o")));
-			}
-			System.out.println("Using output: " + exporter.getOutput());
-
-			// url
-			if (line.hasOption("url")) {
-				String url = line.getOptionValue("url");
-				System.out.println("Using url: " + url);
-				exporter.setUrl(url);
-			} else {
-				System.err.println("No connection url specified.");
-				System.exit(11);
-			}
-
-			// key
-			if (line.hasOption("key")) {
-				String key = line.getOptionValue("key");
-				System.out.println("Using key: " + key.replaceAll(".", "*"));
-			} else {
-				System.out.println("No key specified. Using anonymous access");
-			}
-
-			// project
-			if (line.hasOption("p")) {
-				String project = line.getOptionValue("p");
-				System.out.println("Using project: " + project);
-				exporter.setProjectName(project);
-			} else {
-				System.err.println("The project setting needs to be specified");
-				System.exit(10);
-			}
-
-			// cleanup
-			if (line.hasOption("c")) {
-				exporter.cleanup();
-			}
-
-			System.out.println("-----");
-			exporter.run();
-			System.exit(0);
-		} catch (ParseException exp) {
-			System.err.println("Parsing failed.  Reason: " + exp.getMessage());
-		}
-
-	}
-
-	private void run() throws IOException {
+	public void run() throws IOException {
 		setupClient();
 		export();
 		System.out.println("-----");
@@ -226,11 +144,34 @@ public class HugoExporter {
 		} else {
 			StringBuffer buffer = new StringBuffer();
 			buffer.append("---\n");
+
+			// Node properties
+			appendString(buffer, "path", node.getPath());
+			appendString(buffer, "lang", node.getLanguage());
+			appendString(buffer, "version", node.getVersion());
+			appendString(buffer, "displayField", node.getDisplayField());
+			appendString(buffer, "edited", node.getEdited());
+			appendString(buffer, "created", node.getCreated());
+			UserReference creator = node.getCreator();
+			if (creator != null && creator.getFirstName() != null) {
+				appendString(buffer, "creator", creator.getFirstName() + creator.getLastName());
+			}
+			UserReference editor = node.getEditor();
+			if (editor != null && editor.getFirstName() != null) {
+				appendString(buffer, "editor", editor.getFirstName() + editor.getLastName());
+			}
+			appendStringList("tags", buffer, node.getTags().stream().map(t -> t.getName()).collect(Collectors.toList()));
+
+			// Node Fields
 			for (FieldSchema fieldSchema : schema.getFields()) {
 				extractField(buffer, fieldSchema, node.getFields());
 			}
 			buffer.append("---\n");
-			Path outputPath = new File(new File(output, path), "index.md").toPath();
+			String filename = "index.md";
+			if (schema.isContainer()) {
+				filename = "_index.md";
+			}
+			Path outputPath = new File(new File(output, path), filename).toPath();
 			outputPath.getParent().toFile().mkdirs();
 			System.out.println("Exporting " + node.getUuid() + "/" + lang + " => " + outputPath);
 			FileUtils.writeStringToFile(outputPath.toFile(), buffer.toString(), Charset.defaultCharset());
@@ -238,60 +179,57 @@ public class HugoExporter {
 
 	}
 
-	private void extractField(StringBuffer buffer, FieldSchema fieldSchema, FieldMap fields) {
+	private void appendString(StringBuffer buffer, String key, String value) {
+		buffer.append(key + ": \"" + sanitizeString(value) + "\"\n");
+	}
+
+	protected void extractField(StringBuffer buffer, FieldSchema fieldSchema, FieldMap fields) {
 		String key = fieldSchema.getName();
-		if (key.equals("slug")) {
-			key = "mesh.slug";
-		}
-		if (key.equals("name")) {
-			key = "mesh.name";
-		}
+		String outputKey = "fields_" + key;
 
 		String type = fieldSchema.getType();
 		switch (type) {
 		case "html":
 			HtmlFieldImpl htmlField = fields.getHtmlField(key);
 			if (htmlField != null) {
-				String val2Str = htmlField.getHTML().replaceAll("\"", "\\\"");
-				buffer.append(key + ": \"" + val2Str + "\"\n");
+				appendString(buffer, outputKey, htmlField.getHTML());
 			}
 			break;
 		case "string":
 			StringFieldImpl stringField = fields.getStringField(key);
 			if (stringField != null) {
-				String valStr = stringField.getString().replaceAll("\"", "\\\"");
-				buffer.append(key + ": \"" + valStr + "\"\n");
+				appendString(buffer, outputKey, stringField.getString());
 			}
 			break;
 		case "number":
 			NumberFieldImpl numberField = fields.getNumberField(key);
 			if (numberField != null) {
-				buffer.append(key + ": " + numberField.getNumber() + "\n");
+				buffer.append(outputKey + ": " + numberField.getNumber() + "\n");
 			}
 			break;
 		case "boolean":
 			BooleanFieldImpl booleanField = fields.getBooleanField(key);
 			if (booleanField != null) {
-				buffer.append(key + ": " + booleanField.getValue() + "\n");
+				buffer.append(outputKey + ": " + booleanField.getValue() + "\n");
 			}
 			break;
 		case "date":
 			DateFieldImpl dateField = fields.getDateField(key);
 			if (dateField != null) {
-				buffer.append(key + ": \"" + dateField.getDate() + "\"\n");
+				appendString(buffer, outputKey, dateField.getDate());
 			}
 			break;
 		case "micronode":
 			MicronodeField micronodeField = fields.getMicronodeField(key);
 			if (micronodeField != null) {
 				// TODO add fields
-				buffer.append(key + ": \"" + micronodeField.getUuid() + "\"\n");
+				appendString(buffer, outputKey, micronodeField.getUuid());
 			}
 			break;
 		case "node":
 			NodeField nodeField = fields.getNodeField(key);
 			if (nodeField != null) {
-				buffer.append(key + ": \"" + nodeField.getPath() + "\"\n");
+				appendString(buffer, outputKey, nodeField.getPath());
 			}
 			break;
 		case "list":
@@ -305,9 +243,17 @@ public class HugoExporter {
 		}
 	}
 
+	private String sanitizeString(String text) {
+		if (text == null) {
+			return null;
+		}
+		return text.replaceAll("\"", Matcher.quoteReplacement("\\\""));
+	}
+
 	private void extractListField(StringBuffer buffer, FieldSchema fieldSchema, FieldMap fields) {
 		ListFieldSchema listFieldSchema = (ListFieldSchema) fieldSchema;
 		String key = fieldSchema.getName();
+		String outputKey = "fields_" + key;
 		String listType = listFieldSchema.getListType();
 		switch (listType) {
 		case "node":
@@ -317,46 +263,46 @@ public class HugoExporter {
 					.map(n -> n.getPath())
 					.map(n -> "\"" + n + "\"")
 					.collect(Collectors.toList());
-				buffer.append(key + ": [" + String.join(",", nodeList) + "]\n");
+				buffer.append(outputKey + ": [" + String.join(",", nodeList) + "]\n");
 			}
 			break;
 		case "string":
 			StringFieldListImpl stringField = fields.getStringFieldList(key);
 			if (stringField != null) {
-				extractStringList(key, buffer, stringField.getItems());
+				appendStringList(outputKey, buffer, stringField.getItems());
 			}
 			break;
 		case "html":
 			HtmlFieldListImpl htmlField = fields.getHtmlFieldList(key);
 			if (htmlField != null) {
-				extractStringList(key, buffer, htmlField.getItems());
+				appendStringList(outputKey, buffer, htmlField.getItems());
 			}
 		case "number":
 			NumberFieldListImpl numberField = fields.getNumberFieldList(key);
 			if (numberField != null) {
 				List<String> numberList = numberField.getItems().stream().map(n -> n.toString()).collect(Collectors.toList());
-				buffer.append(key + ": [" + String.join(",", numberList) + "]\n");
+				buffer.append(outputKey + ": [" + String.join(",", numberList) + "]\n");
 			}
 			break;
 		case "date":
 			DateFieldListImpl dateField = fields.getDateFieldList(key);
 			if (dateField != null) {
 				List<String> dateList = dateField.getItems();
-				buffer.append(key + ": [" + String.join(",", dateList) + "]\n");
+				buffer.append(outputKey + ": [" + String.join(",", dateList) + "]\n");
 			}
 			break;
 		case "micronode":
 			MicronodeFieldList micronodeField = fields.getMicronodeFieldList(key);
 			if (micronodeField != null) {
 				List<MicronodeField> micronodeList = micronodeField.getItems();
-				buffer.append(key + ": [" + "]\n");
+				buffer.append(outputKey + ": [" + "]\n");
 			}
 			break;
 		case "boolean":
 			BooleanFieldListImpl booleanField = fields.getBooleanFieldList(key);
 			if (booleanField != null) {
 				List<String> booleanList = booleanField.getItems().stream().map(b -> b.toString()).collect(Collectors.toList());
-				buffer.append(key + ": [" + String.join(",", booleanList) + "]\n");
+				buffer.append(outputKey + ": [" + String.join(",", booleanList) + "]\n");
 			}
 			break;
 		default:
@@ -365,11 +311,10 @@ public class HugoExporter {
 
 	}
 
-	private void extractStringList(String key, StringBuffer buffer, List<String> list) {
-		List<String> stringList = list.stream().map(e -> e.replaceAll("\"", "\\\"")).map(e -> "\"" + e + "\"")
+	private void appendStringList(String key, StringBuffer buffer, List<String> list) {
+		List<String> stringList = list.stream().map(e -> sanitizeString(e)).map(e -> "\"" + e + "\"")
 			.collect(Collectors.toList());
 		String str = String.join(",", stringList);
 		buffer.append(key + ": [" + str + "]\n");
-
 	}
 }

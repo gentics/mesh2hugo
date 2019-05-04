@@ -54,7 +54,7 @@
 				<artifactId>native-image-maven-plugin</artifactId>
 				<version>1.0.0-rc16</version>
 				<configuration>
-					<mainClass>com.gentics.mesh.HugoExporter</mainClass>
+					<mainClass>com.gentics.mesh.Runner</mainClass>
 					<imageName>mesh-hugo-exporter</imageName>
 				</configuration>
 				<executions>

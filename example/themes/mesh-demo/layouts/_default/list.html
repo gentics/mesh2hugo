@@ -2,37 +2,36 @@
 <div>
 	<h1>{{ .Title }}</h1>
 	<p>{{ .Params.name }}</p>
-	<div class="row data.node.products">
+	<div class="row">
 		{{ range .Pages }}
 		<div class="col-xs-12 col-sm-6 col-md-4">
 
 			<div class="panel panel-default">
 				<div class="panel-body">
 					<h3>
-						<a href="{{ .Params.path }}">{{ .Params.name | default "Unknown" }}</a>
-						<small>{{ .Params.SKU | default 0 }}</small>
+						<a href="{{ .Params.path }}">{{ .Params.fields_name | default "Unknown" }}</a>
+						<small>{{ .Params.fields_SKU | default 0 }}</small>
 					</h3>
 
 					<a href="{{ .Params.path }}">
-						<img style="height: 200px; width: 100%;" src="{{ .Params.vehicleImage | default " http://via.placeholder.com/350x200 " }}"
+						<img style="height: 200px; width: 100%;" src="{{ .Params.fields_vehicleImage | default " http://via.placeholder.com/350x200 " }}"
 						 class="img-thumbnail">
 					</a>
 
-					<p>{{ .Params.description | default "-" }}</p>
+					<p>{{ .Params.fields_description | default "-" | truncate 80 }}</p>
 
 					<hr>
 
 					<div class="row">
 						<div class="col-xs-6">
-							<!--| number: 2 -->
 							<h3 style="margin: 5px 0;">
-								<span class="label label-primary">€{{ .Params.price | default 0 }}</span>
+								<span class="label label-primary">€{{  float .Params.fields_price | default 0 | lang.NumFmt 2 }}</span>
 							</h3>
 						</div>
 						<div class="col-xs-6 text-right">
-							<span class="label label-default">Weight: {{ .Params.weight| default 0 }}</span>
+							<span class="label label-default">Weight: {{ int .Params.fields_weight| default 0 }}</span>
 							<br>
-							<span class="label label-default">Stock: {{ .Params.stocklevel | default 0 }}</span>
+							<span class="label label-default">Stock: {{ .Params.fields_stocklevel | default 0 }}</span>
 						</div>
 					</div>
 
