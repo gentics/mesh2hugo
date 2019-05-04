@@ -25,7 +25,7 @@
 					<div class="row">
 						<div class="col-xs-6">
 							<h3 style="margin: 5px 0;">
-								<span class="label label-primary">€{{  float .Params.fields_price | default 0 | lang.NumFmt 2 }}</span>
+								<span class="label label-primary">€{{  .Params.fields_price | default 0 | float | lang.NumFmt 2 }}</span>
 							</h3>
 						</div>
 						<div class="col-xs-6 text-right">
