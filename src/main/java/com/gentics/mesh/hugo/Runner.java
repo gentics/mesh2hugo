@@ -1,4 +1,4 @@
-package com.gentics.mesh;
+package com.gentics.mesh.hugo;
 
 import java.io.File;
 import java.io.IOException;

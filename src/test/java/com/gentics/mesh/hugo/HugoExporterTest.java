@@ -1,4 +1,4 @@
-package com.gentics.mesh;
+package com.gentics.mesh.hugo;
 
 import static org.junit.Assert.assertEquals;
 
@@ -10,6 +10,8 @@ import com.gentics.mesh.core.rest.node.FieldMapImpl;
 import com.gentics.mesh.core.rest.node.field.impl.StringFieldImpl;
 import com.gentics.mesh.core.rest.schema.StringFieldSchema;
 import com.gentics.mesh.core.rest.schema.impl.StringFieldSchemaImpl;
+import com.gentics.mesh.hugo.HugoExporter;
+import com.gentics.mesh.hugo.Runner;
 
 public class HugoExporterTest {
 
