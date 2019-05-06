@@ -13,7 +13,7 @@ import org.apache.commons.cli.ParseException;
 
 public class Runner {
 
-	public static final String NAME = "mesh-hugo-exporter";
+	public static final String NAME = "mesh2hugo";
 
 	public static Options generateOptions() {
 		Options options = new Options();

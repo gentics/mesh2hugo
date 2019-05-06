@@ -33,8 +33,8 @@ A custom hugo theme can access these fields to render the page via the Params di
 ## Usage
 
 ```
-java -jar mesh-hugo-exporter-1.0.0.jar 
-usage: mesh-hugo-exporter
+java -jar mesh2hugo-1.0.0.jar 
+usage: mesh2hugo
  -c,--clean           Clean output directory
  -help                print this message
  -k,--key <arg>       API Key
@@ -46,7 +46,7 @@ usage: mesh-hugo-exporter
 
 Example:
 ```
-java -jar mesh-hugo-exporter-1.0.0.jar -c -p demo -url https://demo.getmesh.io
+java -jar mesh2hugo-1.0.0.jar -c -p demo -url https://demo.getmesh.io
 ```
 
 This will export the Gentics Mesh demo server contents into the content directory.
