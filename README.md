@@ -1,6 +1,6 @@
-# Gentics Mesh Hugo Exporter
+# Mesh2Hugo
 
-The exporter tool works by exporting all stored contents (nodes, binaries) to an output directory.
+Mesh2Hugo works by exporting all stored contents (nodes, binaries) to an output directory.
 
 The content fields of the headless CMS data (node fields) will be exported as markdown files which contain parameter as [front-matter](https://gohugo.io/content-management/front-matter/).
 
@@ -54,3 +54,7 @@ This will export the Gentics Mesh demo server contents into the content director
 ## Theme
 
 An example site and theme can be found in the `example` directory.
+
+## Guide
+
+A guide can be found in the Gentics Mesh documentation. https://getmesh.io/docs/guides/mesh-hugo/
